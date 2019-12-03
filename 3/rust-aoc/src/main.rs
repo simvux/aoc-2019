@@ -18,8 +18,8 @@ const INPUT_PATH: &str = "input.txt";
 fn main() {
     let raw = fs::read_to_string(INPUT_PATH).unwrap();
     let mut raw_iter = raw.split('\n');
-    let first = Line::from(raw_iter.next().unwrap().split(',').map(parse_numeric));
-    let second = Line::from(raw_iter.next().unwrap().split(',').map(parse_numeric));
+    let first = Drawer::from(raw_iter.next().unwrap().split(',').map(parse_numeric));
+    let second = Drawer::from(raw_iter.next().unwrap().split(',').map(parse_numeric));
     let mut intersections = seek_intersect(first, second);
     intersections.sort_by(|a, b| {
         (a.0.abs() + a.1.abs())
@@ -32,23 +32,23 @@ fn main() {
 type Coord = (isize, isize);
 
 #[derive(Debug)]
-struct Path {
+struct Line {
     start: Coord,
     end: Coord,
 }
-impl Path {
+impl Line {
     fn contains(&self, n: (isize, isize)) -> bool {
         let x = n.0 >= self.start.0 && n.0 <= self.end.0;
         let y = n.1 >= self.start.1 && n.1 <= self.end.1;
         x && y
     }
 }
-struct Line<I: Iterator<Item = Coord>> {
+struct Drawer<I: Iterator<Item = Coord>> {
     source: I,
     last: Coord,
-    history: Vec<Path>,
+    history: Vec<Line>,
 }
-impl<I: Iterator<Item = Coord>> From<I> for Line<I> {
+impl<I: Iterator<Item = Coord>> From<I> for Drawer<I> {
     fn from(source: I) -> Self {
         Self {
             source,
@@ -57,12 +57,12 @@ impl<I: Iterator<Item = Coord>> From<I> for Line<I> {
         }
     }
 }
-impl<I: Iterator<Item = Coord>> Line<I> {
+impl<I: Iterator<Item = Coord>> Drawer<I> {
     fn forward(&mut self) -> Option<(isize, isize)> {
         let (off_x, off_y) = self.source.next()?;
         let previous = self.last;
         self.last = (previous.0 + off_x, previous.1 + off_y);
-        let drawn = Path {
+        let drawn = Line {
             start: previous,
             end: self.last,
         };
@@ -75,8 +75,8 @@ impl<I: Iterator<Item = Coord>> Line<I> {
 }
 
 fn seek_intersect<I: Iterator<Item = Coord>>(
-    mut first: Line<I>,
-    mut second: Line<I>,
+    mut first: Drawer<I>,
+    mut second: Drawer<I>,
 ) -> Vec<(isize, isize)> {
     first.complete();
     let mut intersections = Vec::new();
