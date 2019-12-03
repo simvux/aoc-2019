@@ -1,93 +1,102 @@
+use std::collections::HashSet;
 use std::fs;
-
-fn parse_numeric(s: &str) -> (isize, isize) {
-    let mut chars = s.chars();
-    let delim = chars.next().unwrap();
-    let amount = chars.collect::<String>().parse::<isize>().unwrap();
-    match delim {
-        'R' => (amount, 0),
-        'L' => (-amount, 0),
-        'U' => (0, amount),
-        'D' => (0, -amount),
-        _ => panic!("Unrecognized direction `{}`", delim),
-    }
-}
 
 const INPUT_PATH: &str = "input.txt";
 
 fn main() {
     let raw = fs::read_to_string(INPUT_PATH).unwrap();
     let mut raw_iter = raw.split('\n');
-    let first = Drawer::from(raw_iter.next().unwrap().split(',').map(parse_numeric));
-    let second = Drawer::from(raw_iter.next().unwrap().split(',').map(parse_numeric));
+    let first = Drawer::from(raw_iter.next().unwrap().split(',').map(Edit::from));
+    let second = Drawer::from(raw_iter.next().unwrap().split(',').map(Edit::from));
+    println!("{}", part_one(first.clone(), second.clone()));
+    println!("{}", part_two(first, second));
+}
+
+fn part_one<I: Iterator<Item = Edit>>(first: Drawer<I>, second: Drawer<I>) -> isize {
     let mut intersections = seek_intersect(first, second);
     intersections.sort_by(|a, b| {
         (a.0.abs() + a.1.abs())
             .partial_cmp(&(b.0.abs() + b.1.abs()))
             .unwrap()
     });
-    println!("{:#?}", intersections);
+    let pos = intersections.first().unwrap();
+    pos.0.abs() + pos.1.abs()
 }
 
-type Coord = (isize, isize);
-
-#[derive(Debug)]
-struct Line {
-    start: Coord,
-    end: Coord,
+fn part_two<I: Iterator<Item = Edit>>(first: Drawer<I>, second: Drawer<I>) -> isize {
+    0
 }
-impl Line {
-    fn contains(&self, n: (isize, isize)) -> bool {
-        let x = n.0 >= self.start.0 && n.0 <= self.end.0;
-        let y = n.1 >= self.start.1 && n.1 <= self.end.1;
-        x && y
+
+enum Direction {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+struct Edit {
+    direction: Direction,
+    amount: isize,
+}
+impl From<&str> for Edit {
+    fn from(s: &str) -> Edit {
+        let mut chars = s.chars();
+        let delim = chars.next().unwrap();
+        let amount = chars.collect::<String>().parse::<isize>().unwrap();
+        assert_ne!(amount, 0);
+        let direction = match delim {
+            'R' => Direction::Right,
+            'L' => Direction::Left,
+            'U' => Direction::Up,
+            'D' => Direction::Down,
+            _ => panic!("Unrecognized direction `{}`", delim),
+        };
+        Edit { amount, direction }
     }
 }
-struct Drawer<I: Iterator<Item = Coord>> {
+
+#[derive(Clone)]
+struct Drawer<I: Iterator<Item = Edit>> {
     source: I,
-    last: Coord,
-    history: Vec<Line>,
 }
-impl<I: Iterator<Item = Coord>> From<I> for Drawer<I> {
+impl<I: Iterator<Item = Edit>> From<I> for Drawer<I> {
     fn from(source: I) -> Self {
-        Self {
-            source,
-            last: (0, 0),
-            history: Vec::new(),
+        Self { source }
+    }
+}
+impl<I: Iterator<Item = Edit>> Drawer<I> {
+    fn complete<F: FnMut((isize, isize))>(&mut self, mut f: F) {
+        let mut position = (0, 0);
+        while let Some(edit) = self.source.next() {
+            for _ in 0..edit.amount {
+                use Direction::*;
+                match edit.direction {
+                    Left => position.0 -= 1,
+                    Right => position.0 += 1,
+                    Up => position.1 += 1,
+                    Down => position.1 -= 1,
+                }
+                f(position);
+            }
         }
     }
 }
-impl<I: Iterator<Item = Coord>> Drawer<I> {
-    fn forward(&mut self) -> Option<(isize, isize)> {
-        let (off_x, off_y) = self.source.next()?;
-        let previous = self.last;
-        self.last = (previous.0 + off_x, previous.1 + off_y);
-        let drawn = Line {
-            start: previous,
-            end: self.last,
-        };
-        self.history.push(drawn);
-        Some(self.last)
-    }
-    fn complete(&mut self) {
-        while let Some(_) = self.forward() {}
-    }
-}
 
-fn seek_intersect<I: Iterator<Item = Coord>>(
+fn seek_intersect<I: Iterator<Item = Edit>>(
     mut first: Drawer<I>,
     mut second: Drawer<I>,
 ) -> Vec<(isize, isize)> {
-    first.complete();
+    let mut first_history = HashSet::new();
+    let history = &mut first_history;
+    first.complete(|position| {
+        history.insert(position);
+    });
+
     let mut intersections = Vec::new();
 
-    while let Some(position) = second.forward() {
-        for line in first.history.iter() {
-            if line.contains(position) {
-                intersections.push(position);
-            }
-            println!("{:?} bounds do not contain {:?}", line, position);
+    second.complete(|position| {
+        if first_history.get(&position).is_some() {
+            intersections.push(position);
         }
-    }
+    });
     intersections
 }
