@@ -103,7 +103,7 @@ instructionFrom pos list =
     99 -> Left Exit
     1 -> Left $ Add (param 1) (param 2) (target 3)
     2 -> Left $ Mul (param 1) (param 2) (target 3)
-    3 -> Left $ SaveInp (target 3)
+    3 -> Left $ SaveInp (target 1)
     4 -> Left $ OutPut (param 1)
     5 -> Left $ Jt (param 1) (param 2)
     6 -> Left $ Jf (param 1) (param 2)
