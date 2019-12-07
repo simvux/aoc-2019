@@ -37,16 +37,18 @@ unsafeReadLine = unsafePerformIO getLine
 debug :: Show a => a -> a
 debug v = trace (show v) v
 
-run :: Int -> [Int] -> Either [Int] String
+run :: Int -> [Int] -> IO (Either [Int] String)
 run p list =
   let instruction = instructionFrom p list
    in case debug instruction of
-        Right err -> Right err
+        Right err -> return $ Right err
         Left instr ->
           case instr of
             Add x y t -> run (p + 4) $ replace (t, x + y) list
             Mul x y t -> run (p + 4) $ replace (t, x * y) list
-            SaveInp t -> run (p + 2) $ replace (t, read unsafeReadLine) list
+            SaveInp t -> do
+              line <- getLine
+              run (p + 2) $ replace (t, read line) list
             OutPut t -> run (p + 2) $ trace (show t) list
             Jt cmp t ->
               run
@@ -72,11 +74,12 @@ run p list =
                       then 1
                       else 0
                in run (p + 4) $ replace (t, num) list
-            Exit -> Left list
+            Exit -> return $ Left list
 
 runRaw :: String -> IO ()
-runRaw raw =
-  case run 0 $ splitNums (== ',') raw of
+runRaw raw = do
+  result <- run 0 $ splitNums (== ',') raw
+  case result of
     Left final_state -> putStrLn "success"
     Right err        -> putStrLn err
 
