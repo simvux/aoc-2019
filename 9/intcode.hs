@@ -4,7 +4,7 @@ import           System.IO.Unsafe
 
 main = do
   raw <- readFile "input.txt"
-  runRaw raw [1]
+  runRaw raw [2]
 
 splitNums :: (Char -> Bool) -> String -> [Int]
 splitNums p s =
@@ -47,7 +47,7 @@ data Mem =
 run :: Mem -> Either Mem String
 run mem =
   let instruction = instructionFrom (r_ip mem) (r_base mem) (src mem)
-   in case debug instruction of
+   in case instruction of
         Right err -> Right err
         Left instr ->
           case instr of
@@ -64,7 +64,8 @@ run mem =
                 , src = replace (t, head $ input mem) $ src mem
                 , input = drop 1 (input mem)
                 }
-            OutPut t -> run $ mem {r_ip = r_ip mem + 2, output = t : output mem}
+            OutPut t ->
+              run $ mem {r_ip = r_ip mem + 2, output = output mem ++ [t]}
             Jt cmp t ->
               run $
               mem
@@ -111,9 +112,8 @@ runRaw raw inp =
           , r_base = 0
           }
    in case result of
-        Left final_state ->
-          putStrLn $ show (src final_state) ++ "\n" ++ show (output final_state)
-        Right err -> putStrLn err
+        Left final_state -> print $ output final_state
+        Right err        -> putStrLn err
 
 type Position = Int
 
@@ -137,14 +137,14 @@ instructionFrom :: Int -> Int -> [Int] -> Either Instruction String
 instructionFrom pos rbase list =
   case opcode of
     99 -> Left Exit
-    1 -> Left $ Add (param 1) (param 2) (target 3)
-    2 -> Left $ Mul (param 1) (param 2) (target 3)
-    3 -> Left $ SaveInp (target 1)
+    1 -> Left $ Add (param 1) (param 2) (param_write 3)
+    2 -> Left $ Mul (param 1) (param 2) (param_write 3)
+    3 -> Left $ SaveInp (param_write 1)
     4 -> Left $ OutPut (param 1)
     5 -> Left $ Jt (param 1) (param 2)
     6 -> Left $ Jf (param 1) (param 2)
-    7 -> Left $ Less (param 1) (param 2) (target 3)
-    8 -> Left $ Eq (param 1) (param 2) (target 3)
+    7 -> Left $ Less (param 1) (param 2) (param_write 3)
+    8 -> Left $ Eq (param 1) (param 2) (param_write 3)
     9 -> Left $ SetBase (param 1)
     _ ->
       Right $
@@ -153,13 +153,26 @@ instructionFrom pos rbase list =
   where
     action = show $ list !! pos
     opcode = read $ lastN 2 action
-    target n = list !! (pos + n)
     mode n =
       if length action < 3
         then 0
         else case reverse (take (length action - 2) action) !!? n of
                Just m  -> read [m]
                Nothing -> 0
+    param_write n =
+      let v = list !! (n + pos)
+       in case mode (n - 1) of
+            0 -> v
+            1 ->
+              error $
+              "immediate mode on write " ++ show opcode ++ " at " ++ show pos
+            2 -> v + rbase
+            m ->
+              trace
+                ("Warning: Invalid mode " ++
+                 show m ++
+                 " for action " ++ action ++ " positioned at " ++ show pos)
+                v
     param n =
       let v = list !! (n + pos)
        in case mode (n - 1) of
